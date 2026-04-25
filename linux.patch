@@ -106,22 +106,6 @@ index dafbf581c515..791687363cbf 100644
  	X86_NR_SUBARCHS,
  };
  
-diff --git a/arch/x86/kernel/acpi/boot.c b/arch/x86/kernel/acpi/boot.c
-index a3f2fb1fea1b..005e45143a53 100644
---- a/arch/x86/kernel/acpi/boot.c
-+++ b/arch/x86/kernel/acpi/boot.c
-@@ -46,7 +46,11 @@ EXPORT_SYMBOL(acpi_disabled);
- # include <asm/proto.h>
- #endif				/* X86 */
- 
-+#ifdef CONFIG_X86_PS5
-+int acpi_noirq = 1;			/* skip ACPI IRQ initialization */
-+#else
- int acpi_noirq;				/* skip ACPI IRQ initialization */
-+#endif
- static int acpi_nobgrt;			/* skip ACPI BGRT */
- static int acpi_spcr_add __initdata;	/* add SPCR-provided console */
- int acpi_pci_disabled;			/* skip ACPI PCI scan and IRQ initialization */
 diff --git a/arch/x86/kernel/head64.c b/arch/x86/kernel/head64.c
 index fd28b53dbac5..569fc764d267 100644
 --- a/arch/x86/kernel/head64.c
@@ -198,23 +182,6 @@ index dc1afd5c839d..745db92fb2c1 100644
  	[VM_SHARED | VM_EXEC | VM_READ]			= PAGE_READONLY_EXEC,
  	[VM_SHARED | VM_EXEC | VM_WRITE]		= PAGE_SHARED_EXEC,
  	[VM_SHARED | VM_EXEC | VM_WRITE | VM_READ]	= PAGE_SHARED_EXEC
-diff --git a/arch/x86/pci/acpi.c b/arch/x86/pci/acpi.c
-index 7cd5388edc75..4e7d51ff6c8e 100644
---- a/arch/x86/pci/acpi.c
-+++ b/arch/x86/pci/acpi.c
-@@ -23,7 +23,12 @@ struct pci_root_info {
- };
- 
- bool pci_use_e820 = true;
-+#ifdef CONFIG_X86_PS5
-+/* CRS is not compatible. */
-+static bool pci_use_crs = false;
-+#else
- static bool pci_use_crs = true;
-+#endif
- static bool pci_ignore_seg;
- 
- static int __init set_use_crs(const struct dmi_system_id *id)
 diff --git a/arch/x86/pci/common.c b/arch/x86/pci/common.c
 index 63105b29fbf5..c389bc9a458b 100644
 --- a/arch/x86/pci/common.c
@@ -325,16 +292,15 @@ index 000000000000..5263181876f8
 +obj-$(CONFIG_X86_PS5) += ps5.o
 diff --git a/arch/x86/platform/ps5/ps5.c b/arch/x86/platform/ps5/ps5.c
 new file mode 100644
-index 000000000000..fa785c27b6cb
+index 000000000000..731fed163a83
 --- /dev/null
 +++ b/arch/x86/platform/ps5/ps5.c
-@@ -0,0 +1,54 @@
+@@ -0,0 +1,51 @@
 +#include <linux/module.h>
 +#include <linux/ps5.h>
 +
 +#include <asm/apic.h>
 +#include <asm/i8259.h>
-+#include <asm/prom.h>
 +#include <asm/reboot.h>
 +#include <asm/setup.h>
 +
@@ -369,8 +335,6 @@ index 000000000000..fa785c27b6cb
 +
 +void __init x86_ps5_early_setup(void)
 +{
-+	x86_init.pci.init_irq = x86_init_noop;
-+
 +	x86_platform.calibrate_tsc = ps5_calibrate_tsc;
 +	x86_platform.get_wallclock = ps5_get_wallclock;
 +	x86_platform.set_wallclock = ps5_set_wallclock;
@@ -446,23 +410,6 @@ index 53fbd2e0acdd..d36c1909e0e6 100644
  obj-$(CONFIG_S390)		+= s390/
 +
 +obj-$(CONFIG_X86_PS5)		+= ps5/
-diff --git a/drivers/acpi/osl.c b/drivers/acpi/osl.c
-index 62b9c83d4f20..df98bb9b402c 100644
---- a/drivers/acpi/osl.c
-+++ b/drivers/acpi/osl.c
-@@ -561,6 +561,12 @@ acpi_os_install_interrupt_handler(u32 gsi, acpi_osd_handler handler,
- 
- 	acpi_irq_stats_init();
- 
-+#ifdef CONFIG_X86_PS5
-+	/* ACPI IRQ is not available. */
-+	acpi_irq_handler = NULL;
-+	return AE_OK;
-+#endif
-+
- 	/*
- 	 * ACPI interrupts different from the SCI in our copy of the FADT are
- 	 * not supported.
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_bios.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_bios.c
 index 35d04e69aec0..314ceaaaab9f 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_bios.c
