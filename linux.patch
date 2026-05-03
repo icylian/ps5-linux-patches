@@ -1096,7 +1096,7 @@ new file mode 100644
 index 000000000000..1edee8c4316c
 --- /dev/null
 +++ b/drivers/ps5/hdmi.c
-@@ -0,0 +1,1065 @@
+@@ -0,0 +1,1082 @@
 +#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 +
 +#include <linux/module.h>
@@ -1205,6 +1205,19 @@ index 000000000000..1edee8c4316c
 +static u8 tmds_ch_swap;
 +static u8 dp_polarity;
 +static u8 dp_ch_swap;
++
++/* Runtime A/B switches for 1080p@120 black-screen debugging.
++ * Default = 0 (off), exposed at /sys/module/hdmi/parameters/...
++ */
++static int hdmi_force_high_data_1080p120 = 0;
++module_param_named(force_high_data_1080p120, hdmi_force_high_data_1080p120, int, 0644);
++MODULE_PARM_DESC(force_high_data_1080p120,
++	"Apply the 4K@60 high-data-rate i2c writes (0x7011=0xff, 0x7019=0x01, 0x7072/74/0x7206) for 1080p@>=100Hz too. 0=off (default), 1=on.");
++
++static int hdmi_force_scramble_1080p120 = 0;
++module_param_named(force_scramble_1080p120, hdmi_force_scramble_1080p120, int, 0644);
++MODULE_PARM_DESC(force_scramble_1080p120,
++	"Force SCDC scrambling on for 1080p@>=100Hz (normally not required at 297 MHz). 0=off (default), 1=on.");
 +
 +static void i2c_init(u8 code)
 +{
@@ -1722,12 +1735,14 @@ index 000000000000..1edee8c4316c
 +static bool hdmi_needs_high_data(int w, int h, int hz)
 +{
 +	/* High pixel-data-rate path (0x7011=0xff, 0x7019=0x01, 0x7072/0x7074/0x7206).
-+	 * Empirically required for 4K@60. Hypothesis: also needed for any 120Hz
-+	 * mode, since otherwise the chip's internal data path stays in 60Hz mode
-+	 * (sync timing on output is correct, but pixel data reads as black).
++	 * Empirically required for 4K@60. These values may be 4K-specific (encoding
++	 * line buffer size or vertical active count); applying them to 1080p@120
++	 * produces black pixels even though sync timing is correct.
++	 * For 1080p@120 the user can opt in via force_high_data_1080p120=1.
 +	 */
 +	if (h == 2160) return true;
-+	if (hz >= 100) return true;
++	if (h == 1440 && hz >= 100) return true;
++	if (h == 1080 && hz >= 100 && hdmi_force_high_data_1080p120) return true;
 +	return false;
 +}
 +
@@ -1738,9 +1753,11 @@ index 000000000000..1edee8c4316c
 +	 *  4K@60      : 594 MHz -> needs scramble
 +	 *  1440p@120  : ~498 MHz -> needs scramble
 +	 *  1080p@120  : 297 MHz -> NO scramble (within HDMI 1.4 TMDS)
++	 * 1080p@120 can opt in for testing via force_scramble_1080p120=1.
 +	 */
 +	if (h == 2160) return true;
 +	if (h == 1440 && hz >= 100) return true;
++	if (h == 1080 && hz >= 100 && hdmi_force_scramble_1080p120) return true;
 +	return false;
 +}
 +
