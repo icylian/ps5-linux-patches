@@ -1096,7 +1096,7 @@ new file mode 100644
 index 000000000000..1edee8c4316c
 --- /dev/null
 +++ b/drivers/ps5/hdmi.c
-@@ -0,0 +1,1047 @@
+@@ -0,0 +1,1063 @@
 +#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 +
 +#include <linux/module.h>
@@ -1719,10 +1719,25 @@ index 000000000000..1edee8c4316c
 +	i2c_exec();
 +}
 +
-+static bool hdmi_needs_hispeed(int w, int h, int hz)
++static bool hdmi_needs_high_data(int w, int h, int hz)
 +{
-+	/* SCDC high-speed TMDS (>340 MHz pclk) + scrambling required by HDMI 2.0.
-+	 * Covers 4K@60 (594 MHz) and 1440p@>=100Hz (~482-498 MHz) at 8bpc 4:4:4.
++	/* High pixel-data-rate path (0x7011=0xff, 0x7019=0x01, 0x7072/0x7074/0x7206).
++	 * Empirically required for 4K@60. Hypothesis: also needed for any 120Hz
++	 * mode, since otherwise the chip's internal data path stays in 60Hz mode
++	 * (sync timing on output is correct, but pixel data reads as black).
++	 */
++	if (h == 2160) return true;
++	if (hz >= 100) return true;
++	return false;
++}
++
++static bool hdmi_needs_scramble(int w, int h, int hz)
++{
++	/* SCDC scrambling + TMDS bit-clock-ratio = 1/40, mandated by HDMI 2.0
++	 * when TMDS character rate exceeds 340 MHz.
++	 *  4K@60      : 594 MHz -> needs scramble
++	 *  1440p@120  : ~498 MHz -> needs scramble
++	 *  1080p@120  : 297 MHz -> NO scramble (within HDMI 1.4 TMDS)
 +	 */
 +	if (h == 2160) return true;
 +	if (h == 1440 && hz >= 100) return true;
@@ -1731,7 +1746,7 @@ index 000000000000..1edee8c4316c
 +
 +static void setHdmiBasicVideoConfigFlava3(int w, int h, int hz)
 +{
-+	bool hispeed = hdmi_needs_hispeed(w, h, hz);
++	bool high_data = hdmi_needs_high_data(w, h, hz);
 +	i2c_init(1);
 +	i2c_mask(0x7021, 0x00, 0xf0);
 +	i2c_delay(500);
@@ -1774,7 +1789,7 @@ index 000000000000..1edee8c4316c
 +	}
 +	i2c_write(0x10e7, 0xff);
 +	i2c_write(0x7202, 0x20);
-+	if (hispeed) {
++	if (high_data) {
 +		i2c_write(0x7072, 0x01);
 +		i2c_write(0x7074, 0x07);
 +		i2c_write(0x7206, 0x80);
@@ -1791,7 +1806,8 @@ index 000000000000..1edee8c4316c
 +
 +static void setVideoAdditionalConfigFlava3(int w, int h, int hz)
 +{
-+	bool hispeed = hdmi_needs_hispeed(w, h, hz);
++	bool high_data = hdmi_needs_high_data(w, h, hz);
++	bool scramble = hdmi_needs_scramble(w, h, hz);
 +	i2c_init(1);
 +	i2c_waitset(0x10e7, 0x80);
 +	if (h == 2160) {
@@ -1806,7 +1822,7 @@ index 000000000000..1edee8c4316c
 +	i2c_waitclear(0x7204, 0x40);
 +	i2c_delay(10);
 +	i2c_begin_block();
-+	if (hispeed) {
++	if (high_data) {
 +		i2c_write(0x7019, 0x01);
 +	} else {
 +		i2c_write(0x7019, 0x00);
@@ -1822,12 +1838,12 @@ index 000000000000..1edee8c4316c
 +	i2c_waitclear(0x7a84, 0x01);
 +	i2c_begin_block();
 +	i2c_write(0x7a8b, 0x05);
-+	if (hispeed) {
++	if (scramble) {
 +		i2c_write(0x7c00, 0x03);
 +		i2c_write_data(0x7a80, (u8[]){0xa8, 0x20, 0x00, 0x80}, 4);
 +	}
 +	i2c_end_block();
-+	if (hispeed) {
++	if (scramble) {
 +		i2c_waitclear(0x7a84, 0x01);
 +	}
 +	i2c_begin_block();
