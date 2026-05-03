@@ -788,7 +788,7 @@ index 2328c1aa0ead..824cab06abb1 100644
  }
  
  static void fill_audio_info(struct audio_info *audio_info,
-@@ -8181,6 +8193,23 @@ create_validate_stream_for_sink(struct drm_connector *connector,
+@@ -8181,6 +8193,28 @@ create_validate_stream_for_sink(struct drm_connector *connector,
  	return stream;
  }
  
@@ -803,6 +803,11 @@ index 2328c1aa0ead..824cab06abb1 100644
 +	case 241500: /* 1440p60 */
 +	case 241700: /* 1440p60 */
 +	case 594000: /* 2160p60 */
++	/* Experimental high-refresh modes via SCDC high-speed TMDS (8bpc only) */
++	case 297000: /* 1080p120 */
++	case 482844: /* 1440p120 CVT-RB */
++	case 482940: /* 1440p120 CVT-RB v2 */
++	case 497750: /* 1440p120 CVT */
 +		return true;
 +	}
 +	return false;
@@ -812,7 +817,7 @@ index 2328c1aa0ead..824cab06abb1 100644
  enum drm_mode_status amdgpu_dm_connector_mode_valid(struct drm_connector *connector,
  				   const struct drm_display_mode *mode)
  {
-@@ -8194,6 +8223,11 @@ enum drm_mode_status amdgpu_dm_connector_mode_valid(struct drm_connector *connec
+@@ -8194,6 +8228,11 @@ enum drm_mode_status amdgpu_dm_connector_mode_valid(struct drm_connector *connec
  	 */
  	struct amdgpu_dm_connector *aconnector = to_amdgpu_dm_connector(connector);
  
@@ -1091,7 +1096,7 @@ new file mode 100644
 index 000000000000..1edee8c4316c
 --- /dev/null
 +++ b/drivers/ps5/hdmi.c
-@@ -0,0 +1,1035 @@
+@@ -0,0 +1,1047 @@
 +#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 +
 +#include <linux/module.h>
@@ -1714,8 +1719,19 @@ index 000000000000..1edee8c4316c
 +	i2c_exec();
 +}
 +
++static bool hdmi_needs_hispeed(int w, int h, int hz)
++{
++	/* SCDC high-speed TMDS (>340 MHz pclk) + scrambling required by HDMI 2.0.
++	 * Covers 4K@60 (594 MHz) and 1440p@>=100Hz (~482-498 MHz) at 8bpc 4:4:4.
++	 */
++	if (h == 2160) return true;
++	if (h == 1440 && hz >= 100) return true;
++	return false;
++}
++
 +static void setHdmiBasicVideoConfigFlava3(int w, int h, int hz)
 +{
++	bool hispeed = hdmi_needs_hispeed(w, h, hz);
 +	i2c_init(1);
 +	i2c_mask(0x7021, 0x00, 0xf0);
 +	i2c_delay(500);
@@ -1758,7 +1774,7 @@ index 000000000000..1edee8c4316c
 +	}
 +	i2c_write(0x10e7, 0xff);
 +	i2c_write(0x7202, 0x20);
-+	if (h == 2160) {
++	if (hispeed) {
 +		i2c_write(0x7072, 0x01);
 +		i2c_write(0x7074, 0x07);
 +		i2c_write(0x7206, 0x80);
@@ -1775,6 +1791,7 @@ index 000000000000..1edee8c4316c
 +
 +static void setVideoAdditionalConfigFlava3(int w, int h, int hz)
 +{
++	bool hispeed = hdmi_needs_hispeed(w, h, hz);
 +	i2c_init(1);
 +	i2c_waitset(0x10e7, 0x80);
 +	if (h == 2160) {
@@ -1789,7 +1806,7 @@ index 000000000000..1edee8c4316c
 +	i2c_waitclear(0x7204, 0x40);
 +	i2c_delay(10);
 +	i2c_begin_block();
-+	if (h == 2160) {
++	if (hispeed) {
 +		i2c_write(0x7019, 0x01);
 +	} else {
 +		i2c_write(0x7019, 0x00);
@@ -1805,12 +1822,12 @@ index 000000000000..1edee8c4316c
 +	i2c_waitclear(0x7a84, 0x01);
 +	i2c_begin_block();
 +	i2c_write(0x7a8b, 0x05);
-+	if (h == 2160) {
++	if (hispeed) {
 +		i2c_write(0x7c00, 0x03);
 +		i2c_write_data(0x7a80, (u8[]){0xa8, 0x20, 0x00, 0x80}, 4);
 +	}
 +	i2c_end_block();
-+	if (h == 2160) {
++	if (hispeed) {
 +		i2c_waitclear(0x7a84, 0x01);
 +	}
 +	i2c_begin_block();
