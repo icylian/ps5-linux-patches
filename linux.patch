@@ -1096,7 +1096,7 @@ new file mode 100644
 index 000000000000..1edee8c4316c
 --- /dev/null
 +++ b/drivers/ps5/hdmi.c
-@@ -0,0 +1,1063 @@
+@@ -0,0 +1,1065 @@
 +#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 +
 +#include <linux/module.h>
@@ -2049,6 +2049,8 @@ index 000000000000..1edee8c4316c
 +
 +void sceHdmiSetVideoConfig(int w, int h, int hz)
 +{
++	pr_info("sceHdmiSetVideoConfig w=%d h=%d hz=%d high_data=%d scramble=%d\n",
++		w, h, hz, hdmi_needs_high_data(w, h, hz), hdmi_needs_scramble(w, h, hz));
 +	if (hdmi_ic_type == HDMI_IC_TYPE_FLAVA3) {
 +		setHdmiVideoConfigFlava3(w, h, hz);
 +	} else {
