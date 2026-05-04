@@ -1096,7 +1096,7 @@ new file mode 100644
 index 000000000000..1edee8c4316c
 --- /dev/null
 +++ b/drivers/ps5/hdmi.c
-@@ -0,0 +1,1118 @@
+@@ -0,0 +1,1122 @@
 +#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 +
 +#include <linux/module.h>
@@ -1271,8 +1271,12 @@ index 000000000000..1edee8c4316c
 +	memcpy(msg->data, i2c_ctx.msg_hdr, i2c_ctx.msg_hdr->length);
 +
 +	ret = icc_query(buf, buf);
-+	if (ret)
++	if (ret) {
++		pr_warn("i2c_exec: icc_query failed code=%u count=%u length=%u ret=%d\n",
++			i2c_ctx.msg_hdr->code, i2c_ctx.msg_hdr->count,
++			i2c_ctx.msg_hdr->length, ret);
 +		return ret;
++	}
 +
 +	return 0;
 +}
