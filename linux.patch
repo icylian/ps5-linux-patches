@@ -1096,7 +1096,7 @@ new file mode 100644
 index 000000000000..1edee8c4316c
 --- /dev/null
 +++ b/drivers/ps5/hdmi.c
-@@ -0,0 +1,1099 @@
+@@ -0,0 +1,1118 @@
 +#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 +
 +#include <linux/module.h>
@@ -1228,6 +1228,21 @@ index 000000000000..1edee8c4316c
 +module_param_named(skip_init, hdmi_skip_init, int, 0644);
 +MODULE_PARM_DESC(skip_init,
 +	"Skip sceHdmiInitVideoConfig() (which runs on every DPMS-off and resets/disables the chip). Helps test whether mode-change breakage is caused by chip re-init failing to fully restore state. 0=off (default, run Init), 1=skip Init entirely.");
++
++static int hdmi_skip_disable_encode = 0;
++module_param_named(skip_disable_encode, hdmi_skip_disable_encode, int, 0644);
++MODULE_PARM_DESC(skip_disable_encode,
++	"Within sceHdmiInitVideoConfig, skip the sceDisableEncode() sub-call. Tests whether teardown of the previous mode's encoder leaves the chip unable to re-enable. 0=run (default), 1=skip.");
++
++static int hdmi_skip_init_isr = 0;
++module_param_named(skip_init_isr, hdmi_skip_init_isr, int, 0644);
++MODULE_PARM_DESC(skip_init_isr,
++	"Within sceHdmiInitVideoConfig, skip the initIsrForFlava3() sub-call (interrupts/status regs). 0=run (default), 1=skip.");
++
++static int hdmi_skip_init_dp = 0;
++module_param_named(skip_init_dp, hdmi_skip_init_dp, int, 0644);
++MODULE_PARM_DESC(skip_init_dp,
++	"Within sceHdmiInitVideoConfig, skip the initDpForFlava3() sub-call (DP RX setup). DP link training will fail without this. 0=run (default), 1=skip.");
 +
 +static void i2c_init(u8 code)
 +{
@@ -1602,14 +1617,18 @@ index 000000000000..1edee8c4316c
 +
 +void sceHdmiInitVideoConfig(void)
 +{
-+	pr_info("sceHdmiInitVideoConfig (skip_init=%d)\n", hdmi_skip_init);
++	pr_info("sceHdmiInitVideoConfig (skip_init=%d disable_encode=%d isr=%d dp=%d)\n",
++		hdmi_skip_init, hdmi_skip_disable_encode, hdmi_skip_init_isr, hdmi_skip_init_dp);
 +	if (hdmi_skip_init)
 +		return;
 +	stopHdcpHw();
 +	if (hdmi_ic_type == HDMI_IC_TYPE_FLAVA3) {
-+		sceDisableEncode();
-+		initIsrForFlava3();
-+		initDpForFlava3();
++		if (!hdmi_skip_disable_encode)
++			sceDisableEncode();
++		if (!hdmi_skip_init_isr)
++			initIsrForFlava3();
++		if (!hdmi_skip_init_dp)
++			initDpForFlava3();
 +	} else {
 +		initVerde();
 +	}
