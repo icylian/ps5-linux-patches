@@ -1096,7 +1096,7 @@ new file mode 100644
 index 000000000000..1edee8c4316c
 --- /dev/null
 +++ b/drivers/ps5/hdmi.c
-@@ -0,0 +1,1082 @@
+@@ -0,0 +1,1099 @@
 +#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 +
 +#include <linux/module.h>
@@ -1218,6 +1218,16 @@ index 000000000000..1edee8c4316c
 +module_param_named(force_scramble_1080p120, hdmi_force_scramble_1080p120, int, 0644);
 +MODULE_PARM_DESC(force_scramble_1080p120,
 +	"Force SCDC scrambling on for 1080p@>=100Hz (normally not required at 297 MHz). 0=off (default), 1=on.");
++
++static int hdmi_force_vic63_1080p120 = 0;
++module_param_named(force_vic63_1080p120, hdmi_force_vic63_1080p120, int, 0644);
++MODULE_PARM_DESC(force_vic63_1080p120,
++	"For 1080p@>=100Hz, write VIC=63 (CEA-861 1080p120) into 0x7227 instead of VIC=16 (1080p60). Tests whether the chip uses 0x7227 as internal timing index. 0=off (default), 1=on.");
++
++static int hdmi_skip_init = 0;
++module_param_named(skip_init, hdmi_skip_init, int, 0644);
++MODULE_PARM_DESC(skip_init,
++	"Skip sceHdmiInitVideoConfig() (which runs on every DPMS-off and resets/disables the chip). Helps test whether mode-change breakage is caused by chip re-init failing to fully restore state. 0=off (default, run Init), 1=skip Init entirely.");
 +
 +static void i2c_init(u8 code)
 +{
@@ -1592,6 +1602,9 @@ index 000000000000..1edee8c4316c
 +
 +void sceHdmiInitVideoConfig(void)
 +{
++	pr_info("sceHdmiInitVideoConfig (skip_init=%d)\n", hdmi_skip_init);
++	if (hdmi_skip_init)
++		return;
 +	stopHdcpHw();
 +	if (hdmi_ic_type == HDMI_IC_TYPE_FLAVA3) {
 +		sceDisableEncode();
@@ -1779,9 +1792,13 @@ index 000000000000..1edee8c4316c
 +	/* Set colorimetry and aspect ratio (HDTV and 16:9) */
 +	i2c_write(0x7225, 0x20 | 0x08);
 +	if (h == 1080) {
-+		/* Set VIC and content type */
-+		i2c_write_data(0x7227, (u8[]){0x10, 0x00}, 2);
-+		i2c_write_data(0x7070, (u8[]){0x10, 0x10, 0x00, 0x00, 0x00, 0x00}, 6);
++		/* Set VIC and content type. VIC 16 = CEA 1080p60 (default).
++		 * 0x7227 may double as chip-internal timing index — try VIC 63
++		 * (CEA 1080p120) for hz>=100 if force_vic63_1080p120 is set.
++		 */
++		u8 vic = (hz >= 100 && hdmi_force_vic63_1080p120) ? 0x3F : 0x10;
++		i2c_write_data(0x7227, (u8[]){vic, 0x00}, 2);
++		i2c_write_data(0x7070, (u8[]){vic, 0x10, 0x00, 0x00, 0x00, 0x00}, 6);
 +	} else if (h == 1440) {
 +		/* Set VIC and content type */
 +		i2c_write_data(0x7227, (u8[]){0x04, 0x00}, 2);
