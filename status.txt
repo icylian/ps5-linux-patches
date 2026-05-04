@@ -1,0 +1,23 @@
+  Title: HDMI converter (MN864739/Flava3) cannot recover after runtime mode change
+
+  Repro:
+  1. Boot directly to mode X (any of 1080p60/1440p60 with drm.edid_firmware) → works
+  2. GUI mode change to mode Y (any other) → chip outputs Y timing but pixels black
+  3. State persists across all software recovery attempts
+
+  Diagnostic data collected:
+  - ICC channel verified working (added generic ICC_QUERY ioctl, full TX/RX traces)
+  - Replayed kernel's exact i2c byte sequences from userspace post-failure → no recovery
+  - Granular Init sub-call bisection (skip_disable_encode / skip_init_isr / skip_init_dp):
+    * skip_init_isr=1 / skip_init_dp=1 → DP link training fails (CR after 100 tries)
+    * skip_disable_encode=1 → no behavioral change vs default
+  - SCM-level toggle via sceControlHdmiEvent(0/1) → no effect
+  - Multiple full re-init+SetVideoConfig cycles → no effect
+
+  Hypothesis: MN864739 has internal state machine that latches at first SCM-side
+  init at PS5 power-on. i2c-level reconfiguration cannot reset this state.
+  PS5 OS mode change likely uses an SCM service we haven't reverse-engineered.
+
+  Tested monitor: Philips 275M1RZ 2K144Hz HDMI 2.0 monitor
+  EDID workaround: gc553_2k.bin via drm.edid_firmware (real Philips EDID also
+  black-screens at 1440p60).
