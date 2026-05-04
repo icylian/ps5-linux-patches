@@ -245,7 +245,7 @@ static void i2c_waitclear(uint16_t reg, uint8_t value) {
 	C.hdr->count++;
 }
 
-static void i2c_cmd_3_5_(uint16_t reg, uint8_t value) {
+static void __attribute__((unused)) i2c_cmd_3_5_(uint16_t reg, uint8_t value) {
 	struct i2c_cmd_hdr *h = (struct i2c_cmd_hdr *)C.cur;
 	h->major = 3; h->minor = 5; h->count = 1; h->length = sizeof(*h);
 	C.cur += sizeof(*h);
@@ -275,7 +275,7 @@ static void i2c_cmd_5_4_(uint8_t v) {
 	C.hdr->count++;
 }
 
-static void i2c_cmd_5_5_(uint8_t v) {
+static void __attribute__((unused)) i2c_cmd_5_5_(uint8_t v) {
 	struct i2c_cmd_hdr *h = (struct i2c_cmd_hdr *)C.cur;
 	h->major = 5; h->minor = 5; h->count = 1; h->length = sizeof(*h);
 	C.cur += sizeof(*h);
@@ -617,6 +617,26 @@ static void seq_audio_mute(int mute) {
 	i2c_exec();
 }
 
+static void seq_control_event(uint8_t enable) {
+	/* sceControlHdmiEvent — tells SCM to enable/disable HDMI event handling.
+	 * Toggling this MAY trigger SCM-side chip reinit. */
+	i2c_init(4);
+	i2c_cmd_5_4_(enable);
+	i2c_exec();
+}
+
+static void seq_get_config(void) {
+	/* getHdmiConfiguration — SCM returns chip type, polarities, etc.
+	 * The reply hex dump shows the chip's current state as known to SCM. */
+	memset(&C.xfer, 0, sizeof(C.xfer));
+	struct icc_msg *m = (struct icc_msg *)C.xfer.query;
+	m->service_id = ICC_SERVICE_ID_GENERAL;
+	m->msg_type = 0x16;
+	m->length = ICC_MSG_MIN_SIZE;
+	m->data[0] = 0x10;
+	icc_send();
+}
+
 /* === CLI dispatch =========================================== */
 
 static void usage(const char *prog) {
@@ -631,6 +651,8 @@ static void usage(const char *prog) {
 "  set_audio                sceHdmiSetAudioConfig\n"
 "  video_mute <0|1>\n"
 "  audio_mute <0|1>\n"
+"  control_event <0|1>      sceControlHdmiEvent — may trigger SCM-side reinit\n"
+"  get_config               read chip configuration (verbose-by-default)\n"
 "\n"
 "Init sub-steps (run individually):\n"
 "  stop_hdcp\n"
@@ -693,6 +715,12 @@ int main(int argc, char **argv) {
 	} else if (!strcmp(cmd, "audio_mute")) {
 		if (rest < 1) { usage(argv[0]); return 1; }
 		seq_audio_mute(argl(a[0]));
+	} else if (!strcmp(cmd, "control_event")) {
+		if (rest < 1) { usage(argv[0]); return 1; }
+		seq_control_event(argl(a[0]));
+	} else if (!strcmp(cmd, "get_config")) {
+		C.verbose = 1;  /* always show reply for this read */
+		seq_get_config();
 	} else if (!strcmp(cmd, "stop_hdcp")) {
 		seq_stopHdcpHw();
 	} else if (!strcmp(cmd, "disable_encode")) {
