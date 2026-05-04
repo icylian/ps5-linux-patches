@@ -2558,7 +2558,7 @@ new file mode 100644
 index 000000000000..9e1b790465f8
 --- /dev/null
 +++ b/drivers/ps5/spcie.c
-@@ -0,0 +1,562 @@
+@@ -0,0 +1,593 @@
 +#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 +
 +#include <linux/module.h>
@@ -2595,6 +2595,12 @@ index 000000000000..9e1b790465f8
 +#define ICC_IOC_MAGIC		'I'
 +
 +#define ICC_FAN_CHANGE_SERVO_PATTERN	_IOW(ICC_IOC_MAGIC, 1, u8)
++#define ICC_QUERY			_IOWR(ICC_IOC_MAGIC, 2, struct icc_xfer)
++
++struct icc_xfer {
++	__u8 query[ICC_MSG_MAX_SIZE];
++	__u8 reply[ICC_MSG_MAX_SIZE];
++};
 +
 +struct spcie_dev;
 +
@@ -2978,6 +2984,31 @@ index 000000000000..9e1b790465f8
 +		if (copy_from_user(&pattern, (u8 __user *)arg, sizeof(u8)))
 +			return -EFAULT;
 +		return icc_fan_change_servo_pattern(pattern);
++	}
++
++	case ICC_QUERY:
++	{
++		struct icc_xfer *xfer;
++		int ret;
++
++		xfer = kzalloc(sizeof(*xfer), GFP_KERNEL);
++		if (!xfer)
++			return -ENOMEM;
++
++		if (copy_from_user(xfer, (void __user *)arg, sizeof(*xfer))) {
++			kfree(xfer);
++			return -EFAULT;
++		}
++
++		ret = icc_query(xfer->query, xfer->reply);
++
++		if (copy_to_user((void __user *)arg, xfer, sizeof(*xfer))) {
++			kfree(xfer);
++			return -EFAULT;
++		}
++
++		kfree(xfer);
++		return ret;
 +	}
 +
 +	default:
