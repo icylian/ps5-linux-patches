@@ -1328,7 +1328,7 @@ index 321310ba2c08..764da52902ac 100644
  	header = (const struct common_firmware_header *)
  		adev->sdma.instance[instance].fw->data;
 diff --git a/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c b/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c
-index 8b60299b73ef..0a3ad54066d6 100644
+index 8b60299b73ef..7ecf928cae8e 100644
 --- a/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c
 +++ b/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c
 @@ -4202,6 +4202,14 @@ static void gfx_v10_0_check_gfxoff_flag(struct amdgpu_device *adev)
@@ -1406,7 +1406,7 @@ index 8b60299b73ef..0a3ad54066d6 100644
  		amdgpu_gfx_cp_init_microcode(adev, AMDGPU_UCODE_ID_CP_MEC2);
  		amdgpu_gfx_cp_init_microcode(adev, AMDGPU_UCODE_ID_CP_MEC2_JT);
  	} else {
-@@ -10104,6 +10130,24 @@ static u32 gfx_v10_0_get_cu_active_bitmap_per_sh(struct amdgpu_device *adev)
+@@ -10104,6 +10130,21 @@ static u32 gfx_v10_0_get_cu_active_bitmap_per_sh(struct amdgpu_device *adev)
  	return cu_active_bitmap;
  }
  
@@ -1420,27 +1420,22 @@ index 8b60299b73ef..0a3ad54066d6 100644
 + *   amdgpu.ps5_cu_unlock=0   (disable)
 + *   amdgpu.ps5_cu_unlock=1   (probe)
 + */
-+static int ps5_cu_unlock = 3;
++static int ps5_cu_unlock = 0;
 +module_param(ps5_cu_unlock, int, 0444);
 +MODULE_PARM_DESC(ps5_cu_unlock,
-+	"PS5 harvested-CU unlock (0=off, 1=probe, 2=SE0/SH0, 3=all (default), 4=probe-all)");
-+
-+// PCI device ID of the silicon this unlock applies to.
-+#define PS5_PCI_DEVID_RETAIL 0x13FB
++	"PS5 harvested-CU unlock (0=off (default), 1=probe, 2=SE0/SH0, 3=all, 4=probe-all)");
 +
  static int gfx_v10_0_get_cu_info(struct amdgpu_device *adev,
  				 struct amdgpu_cu_info *cu_info)
  {
-@@ -10117,6 +10161,45 @@ static int gfx_v10_0_get_cu_info(struct amdgpu_device *adev,
+@@ -10117,6 +10158,43 @@ static int gfx_v10_0_get_cu_info(struct amdgpu_device *adev,
  	amdgpu_gfx_parse_disable_cu(adev, disable_masks, 4, 2);
  
  	mutex_lock(&adev->grbm_idx_mutex);
 +	/* PS5: unlock harvested CUs. CC alone updates enumeration but SPI
 +	 * still dispatches only to enabled WGPs; both writes are required
 +	 * (verified empirically on BC-250). */
-+	if (ps5_cu_unlock > 0 &&
-+	    adev->pdev->vendor == PCI_VENDOR_ID_ATI &&
-+	    adev->pdev->device == PS5_PCI_DEVID_RETAIL) {
++	if (ps5_cu_unlock > 0) {
 +		int ps5_se, ps5_sh;
 +		for (ps5_se = 0; ps5_se < adev->gfx.config.max_shader_engines; ps5_se++) {
 +			for (ps5_sh = 0; ps5_sh < adev->gfx.config.max_sh_per_se; ps5_sh++) {
