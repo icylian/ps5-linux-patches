@@ -1642,7 +1642,7 @@ index f8c13bad4ac2..1a9cccc5fa5c 100644
  	if ((mode->flags & DRM_MODE_FLAG_INTERLACE) ||
  			(mode->flags & DRM_MODE_FLAG_DBLSCAN))
  		return result;
-@@ -10957,12 +10978,64 @@ static void amdgpu_dm_atomic_commit_tail(struct drm_atomic_state *state)
+@@ -10957,12 +10978,71 @@ static void amdgpu_dm_atomic_commit_tail(struct drm_atomic_state *state)
  	drm_atomic_helper_update_legacy_modeset_state(dev, state);
  	drm_dp_mst_atomic_wait_for_dependencies(state);
  
@@ -1699,6 +1699,13 @@ index f8c13bad4ac2..1a9cccc5fa5c 100644
 +				sceHdmiDeviceSetVideoMute(0);
 +				sceHdmiSetAudioConfig(channels);
 +				sceHdmiSetAudioMute(0);
++				/* Re-pull the bridge output.  A modeset that
++				 * follows a teardown InitVideoConfig (e.g. the
++				 * gamescope->KDE DRM-master handover) leaves the
++				 * FLAVA3 output disabled; config+unmute alone
++				 * won't relight it -> KDE black screen.  Same
++				 * i2c pull the boot EDID handshake issues. */
++				sceHdmiOutputMode();
 +			}
 +		}
 +	}
