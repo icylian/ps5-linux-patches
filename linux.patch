@@ -1616,15 +1616,16 @@ index f8c13bad4ac2..1a9cccc5fa5c 100644
  
  	amdgpu_dm_irq_fini(adev);
  	amdgpu_dm_fini(adev);
-@@ -6880,6 +6890,12 @@ static void fill_stream_properties_from_drm_display_mode(
+@@ -6880,6 +6890,13 @@ static void fill_stream_properties_from_drm_display_mode(
  
  	stream->output_color_space = get_output_color_space(timing_out, connector_state);
  	stream->content_type = get_output_content_type(connector_state);
 +
 +#ifdef CONFIG_X86_PS5
-+	/* Hardcode RGB888. */
-+	// timing_out->pixel_encoding = PIXEL_ENCODING_RGB;
-+	// timing_out->display_color_depth = COLOR_DEPTH_888;
++	/* PS5 DP->HDMI bridge only accepts RGB888/sRGB. */
++	timing_out->pixel_encoding = PIXEL_ENCODING_RGB;
++	timing_out->display_color_depth = COLOR_DEPTH_888;
++	stream->output_color_space = COLOR_SPACE_SRGB;
 +#endif
  }
  
@@ -5625,7 +5626,7 @@ new file mode 100644
 index 000000000000..8f094490d677
 --- /dev/null
 +++ b/drivers/ps5/hdmi.c
-@@ -0,0 +1,1237 @@
+@@ -0,0 +1,1249 @@
 +#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 +
 +#include <linux/module.h>
@@ -6855,10 +6856,22 @@ index 000000000000..8f094490d677
 +
 +void hdmi_notification_handler(struct icc_msg *msg)
 +{
++		static bool edid_latched;
++
 +		if (msg->data[1] == 0x02) {
++			/*
++			 * Latch the first EDID (boot handshake).  A display power-
++			 * cycle makes the firmware re-send this; re-adopting it and
++			 * re-pulling the bridge output would modeset the DP->HDMI
++			 * bridge into a black screen it cannot recover from.  So
++			 * latch once and ignore repeats.
++			 */
++			if (edid_latched)
++				return;
 +			fix_edid(&msg->data[4]);
 +			real_edid = drm_edid_alloc(&msg->data[4], *(u16 *)&msg->data[2]);
-+			pr_info("got real edid\n");
++			edid_latched = true;
++			pr_info("got real edid (latched)\n");
 +			sceHdmiOutputMode();
 +		}
 +}
