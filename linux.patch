@@ -1642,7 +1642,7 @@ index f8c13bad4ac2..1a9cccc5fa5c 100644
  	if ((mode->flags & DRM_MODE_FLAG_INTERLACE) ||
  			(mode->flags & DRM_MODE_FLAG_DBLSCAN))
  		return result;
-@@ -10957,12 +10978,71 @@ static void amdgpu_dm_atomic_commit_tail(struct drm_atomic_state *state)
+@@ -10957,12 +10978,76 @@ static void amdgpu_dm_atomic_commit_tail(struct drm_atomic_state *state)
  	drm_atomic_helper_update_legacy_modeset_state(dev, state);
  	drm_dp_mst_atomic_wait_for_dependencies(state);
  
@@ -1661,6 +1661,11 @@ index f8c13bad4ac2..1a9cccc5fa5c 100644
 +			if (dm_new_crtc_state->stream && dc_is_dp_signal(dm_new_crtc_state->stream->signal)) {
 +				sceHdmiSetAudioMute(1);
 +				sceHdmiDeviceSetVideoMute(1);
++				/* Deep bridge re-init: gamescope->KDE hard-sticks the
++				 * FLAVA3 bridge and only the boot ICC-probe sequence
++				 * recovers it (previously reboot-only). Re-run it here. */
++				pr_info("ps5 hdmi: deep re-init on modeset\n");
++				hdmiSystemResume();
 +				sceHdmiInitVideoConfig();
 +			}
 +		}
